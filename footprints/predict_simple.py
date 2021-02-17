@@ -28,7 +28,8 @@ IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png'}
 
 class InferenceManager:
 
-    def __init__(self, model_name, save_dir, use_cuda, save_visualisations=True):
+    def __init__(self, model_name, save_dir, use_cuda, opt_level, save_visualisations=True):
+        self.opt_level = opt_level
 
         download_model_if_doesnt_exist(model_name)
         model_load_folder = os.path.join(MODEL_DIR, model_name)
@@ -137,7 +138,7 @@ if __name__ == '__main__':
     args = parse_args()
     inference_manager = InferenceManager(
         model_name=args.model,
-        use_cuda=torch.cuda.is_available() and not args.no_cuda,
+        use_cuda=False,#torch.cuda.is_available() and not args.no_cuda,
         save_visualisations=not args.no_save_vis,
         save_dir=args.save_dir)
     inference_manager.predict(image_path=args.image)

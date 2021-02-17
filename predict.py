@@ -1,4 +1,5 @@
 import argparse
+import time
 
 from footprints.predict_simple import InferenceManager, parse_args
 import torch
@@ -12,6 +13,14 @@ from matplotlib import colors as clr
 import posenet
 
 from sklearn.cluster import DBSCAN
+
+def write_info(save_dir, start, load_time, predict_time, img_name, opt_level, verbose=True):
+	total = load_time + predict_time
+	output_string = img_name + " [" + str(opt_level) + "] (" + str(start) + "): load_time->" + str(load_time) + " predict_time->" + str(predict_time) + " TOTAL->" + str(total) + "\n"
+	vis_save_path = os.path.join(save_dir, "quantization.txt")
+	open(vis_save_path, "a").write(output_string)
+	if verbose:
+		print(output_string)
 
 
 class Point:
@@ -150,10 +159,36 @@ def find_near_keypoints(keypoint_coords):
 	#metto tutti i kp in un'unico array piatto e di interi, lo giro di DBSCAN che mi dice quali punti sono vicini.
 	#poi vedo se ci sono punti di persone diverse che appartengono allo stesso cluster. Nel caso
 	num_persone = len(keypoint_coords)
+<<<<<<< Updated upstream
 	all_kp = keypoint_coords.reshape([num_persone * 17, 2])
 	all_kp = [findNearest(point) for point in all_kp]
+=======
+	all_kp = keypoint_coords.copy()
 
-	labels = list(DBSCAN(eps=20, min_samples=2).fit(all_kp).labels_)
+	# per ogni persona potrei guardare quale tra leftAnkle (15) e rightAnkle (caviglia, 16) è più confident, e poi
+	# ottenere le coordinate di quella parte. Qui prendo direttamente rightAnkle e guardo il valore della depth
+	# nella matrice hidden_depth e lo inserisco in tutte le coordinate dei punti di quella persona
+	if hidden_depth is not None:
+		depth_column = []
+		for persona in keypoint_coords:
+			coord_ankle = findNearest(persona[16])
+			point_depth = hidden_depth[coord_ankle[0]][coord_ankle[1]] * 10
+			depth_column.append([[point_depth] for _ in range(17)])
+		all_kp = np.append(all_kp, depth_column, axis=2)
+
+	all_kp = all_kp.reshape([num_persone * 17, 2 if hidden_depth is None else 3])
+
+	if args.showplt:
+		fig = plt.figure()
+		ax = Axes3D(fig)
+		ax.scatter(all_kp[:, 2], all_kp[:, 1] * -1, all_kp[:, 0] * -1, s=60)
+		ax.view_init(azim=200)
+		plt.show()
+
+	all_kp = [findNearest(point) + (point[2],) for point in all_kp]
+>>>>>>> Stashed changes
+
+	labels = list(DBSCAN(eps=25, min_samples=2).fit(all_kp).labels_)
 
 	#lo raggruppo nuovamente per persona
 
@@ -266,13 +301,15 @@ def onePointEachPerson(centers_of_mass, maxDistance):
 
 
 class ObstacleManager(InferenceManager):
-	def __init__(self, model_name, save_dir, use_cuda, save_visualisations=True):
-		super().__init__(model_name, save_dir, use_cuda, save_visualisations)
+	def __init__(self, model_name, save_dir, use_cuda, opt_level, save_visualisations=True):
+		super().__init__(model_name, save_dir, use_cuda, opt_level, save_visualisations)
+		self.opt_level = opt_level
+
 		self.posenet_model = posenet.load_model(args.posenet_model)
-		if self.use_cuda:
-			self.posenet_model = self.posenet_model.cuda()
-		else:
-			self.posenet_model = self.posenet_model.cpu()
+		#if self.use_cuda:
+		#	self.posenet_model = self.posenet_model.cuda()
+		#else:
+		self.posenet_model = self.posenet_model.cpu()
 		self.output_stride = self.posenet_model.output_stride
 
 	def posenet_predict(self, filename, base_out_image=None):
@@ -335,6 +372,8 @@ class ObstacleManager(InferenceManager):
 		pred = self.model_manager.model(preprocessed_image)
 		pred = pred['1/1'].data.cpu().numpy().squeeze(0)
 
+		
+
 		filename, _ = os.path.splitext(os.path.basename(image_path))
 		npy_save_path = os.path.join(self.save_dir, "outputs", filename + '.npy')
 		print("└> Saving predictions to {}".format(npy_save_path))
@@ -351,7 +390,7 @@ class ObstacleManager(InferenceManager):
 			hidden_depth = cv2.resize(sigmoid_to_depth(pred[3]), original_image.size)
 			# TODO: da qui indentificare il centro di ogni footprint e vedere la distanza nello stesso punto della
 			# hidden_depth in modo da vedere quanto è distante nella scena
-			original_image = np.array(original_image) / 255.0
+			original_image = np.array(original_image).astype(dtype=self.opt_level, copy=True) / 255.0
 
 			# normalise the relevant parts of the depth map and apply colormap
 			_max = hidden_depth[hidden_ground].max()
@@ -414,16 +453,37 @@ def posenet_params(parser: argparse.ArgumentParser):
 	parser.add_argument("--posenet_model", type=int, default=101)
 	parser.add_argument('--scale_factor', type=float, default=1.0)
 	parser.add_argument('--notxt', action='store_true')
+<<<<<<< Updated upstream
+=======
+	parser.add_argument('--showplt', action='store_true')
+	parser.add_argument('--verbose', action='store_true')
+	parser.add_argument('--opt_level', type=str, choices=['float64', 'float32', 'float16'], default='float64')
+>>>>>>> Stashed changes
 
 
 if __name__ == '__main__':
 	args = parse_args(posenet_params)
+	start = time.time()
 	inference_manager = ObstacleManager(
 		model_name=args.model,
-		use_cuda=torch.cuda.is_available() and not args.no_cuda,
+		use_cuda=False,#torch.cuda.is_available() and not args.no_cuda,
+		opt_level=args.opt_level,
 		save_visualisations=not args.no_save_vis,
 		save_dir=args.save_dir)
+	load_time = time.time() - start
 	inference_manager.predict(image_path=args.image)
+	predict_time = time.time() - start - load_time
+	
+	write_info(save_dir=args.save_dir, 
+		start=start,
+		load_time=load_time,
+		predict_time=predict_time,
+		img_name=args.image,
+		opt_level=args.opt_level,
+		verbose=args.verbose)
+	
+
+
 
 
 

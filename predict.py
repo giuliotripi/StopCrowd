@@ -63,6 +63,7 @@ class ClusterInfo:
 		self.isFoot = isFoot
 		self.com = None
 
+
 class Draw:
 	def __init__(self, img):
 		self.img = img
@@ -84,11 +85,9 @@ class Draw:
 		self.img = cv2.line(self.img, (pointA.getYInt(), pointA.getXInt()), (pointB.getYInt(), pointB.getXInt()), color=colorLine,
 						thickness=1)
 
-
 	def tag(self, point, text, colorText=clr.to_rgba('red')):
 		self.img = cv2.putText(img=self.img, text=text, org=(point.getYInt(), point.getXInt()), fontFace=cv2.FONT_HERSHEY_SIMPLEX,
 						   color=colorText, thickness=1, fontScale=0.6)
-
 
 	def line_with_tag(self, pointA, pointB, text, colorLine=clr.to_rgba('blue'), colorText=clr.to_rgba('red')):
 		self.img = cv2.line(self.img, (pointA.getYInt(), pointA.getXInt()), (pointB.getYInt(), pointB.getXInt()), color=colorLine,
@@ -108,7 +107,6 @@ class Draw:
 						self.line_with_tag(points[i], points[j], str(int(dist)))
 					else:
 						self.line(points[i], points[j])
-
 
 	def info_about_the_closest(self, points, maxDistance):
 		dim = len(points)
@@ -215,7 +213,7 @@ def find_people_clusters_dbscan(people_coords, colors=None, draw=None):
 				color = clr.to_rgba(colors[i % len(colors)])
 				draw.points(people_clusters[label], radius=3, colorPoints=color)
 				for persona in people_clusters[label]:
-					draw_tag(Point.createFromList([persona[0]+25, persona[1]-10]), str(i+1), colorText=clr.to_rgba('yellow'))
+					draw.tag(Point.createFromList([persona[0]+25, persona[1]-10]), str(i+1), colorText=clr.to_rgba('yellow'))
 				i += 1
 
 	return people_clusters
@@ -304,6 +302,7 @@ def onePointEachPerson(centers_of_mass, maxDistance):
 			if done:
 				alreadyDone.append(done)
 	return result
+
 
 class ObstacleManager(InferenceManager):
 	def __init__(self, model_name, save_dir, use_cuda, save_visualisations=True):
@@ -427,17 +426,17 @@ class ObstacleManager(InferenceManager):
 
 			colors = ["orange", "green", "blue", "chocolate", "dimgrey", "black"]
 
-			feet_clusters, people_coords_dbscan = find_feet_clusters_dbscan(feet_coords, clr.to_rgba('red'))
+			feet_clusters, people_coords_dbscan = find_feet_clusters_dbscan(feet_coords, clr.to_rgba('red'), draw)
 
 			# associo all'immagine le linee che uniscono le persone con tag riferito a distanza
 			draw.distance(points=peoplePoints, maxDistance=100)
 
-			people_clusters_dbscan = find_people_clusters_dbscan(people_coords_dbscan, colors)
+			people_clusters_dbscan = find_people_clusters_dbscan(people_coords_dbscan, colors, draw)
 
 			# associo all'immagine un tag per ogni persona con scritto la distanza della persona piu vicina
 			# visualisation = draw_info_about_the_closest(img=visualisation, points=peoplePoints, maxDistance=100)
 
-			#prova per stelle
+			# prova per stelle
 			draw.stars(5, clr.to_rgba('red'))
 
 			visualisation = draw.get_img()

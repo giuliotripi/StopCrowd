@@ -35,9 +35,10 @@ class Time:
 			if len(self.steps) > 1:
 				for i in range(1, len(self.steps)):
 					output_string += "-> " + self.steps[i][1] + ": " + str(self.steps[i][0] - self.steps[i-1][0]) + "\n"
+			output_string += "TOTAL TIME ELAPSED: %f\n" % (self.steps[len(self.steps)-1][0] - self.start)
 		output_string += "\n"
 
-		vis_save_path = os.path.join(self.save_dir, "quantization.txt")
+		vis_save_path = os.path.join(self.save_dir, "execution_time.txt")
 		open(vis_save_path, "a").write(output_string)
 		print(output_string)
 
@@ -420,7 +421,7 @@ class ObstacleManager(InferenceManager):
 			print(hidden_ground.shape)
 
 			# STEP TIME
-			timestamp_manager.add_step(time.time(), "setup")
+			timestamp_manager.add_step(time.time(), "footprints")
 			clusters, numeroCluster, clustersInfo, feet = find_clusters(hidden_ground)
 			# STEP TIME
 			timestamp_manager.add_step(time.time(), "find_clusters")
@@ -460,23 +461,23 @@ class ObstacleManager(InferenceManager):
 
 			feet_coords = [[point.getXInt(), point.getYInt()] for point in points]
 
+			# STEP TIME
+			timestamp_manager.add_step(time.time(), "colormap+feet_coords")
+			feet_clusters, people_coords_dbscan = find_feet_clusters_dbscan(feet_coords, clr.to_rgba('red'), draw)
+			# STEP TIME
+			timestamp_manager.add_step(time.time(), "find_feet_clusters_dbscan")
+
 			# a partire dai baricentri accoppio i piedi identificando le persone e associo questi punti all'immagine
 			peoplePoints = onePointEachPerson(points, 31)  # massima distanza tollerabile tra i piedi
 			draw.points(peoplePoints, colorPoints=clr.to_rgba('yellow'))
 
 			colors = ["orange", "green", "blue", "chocolate", "dimgrey", "black"]
 
-			# STEP TIME
-			timestamp_manager.add_step(time.time(), "setup2")
-			feet_clusters, people_coords_dbscan = find_feet_clusters_dbscan(feet_coords, clr.to_rgba('red'), draw)
-			# STEP TIME
-			timestamp_manager.add_step(time.time(), "find_feet_clusters_dbscan")
-
 			# associo all'immagine le linee che uniscono le persone con tag riferito a distanza
 			draw.distance(points=peoplePoints, maxDistance=100)
 
 			# STEP TIME
-			timestamp_manager.add_step(time.time(), "setup3")
+			timestamp_manager.add_step(time.time(), "peoplePoints")
 			people_clusters_dbscan = find_people_clusters_dbscan(people_coords_dbscan, colors, draw)
 			# STEP TIME
 			timestamp_manager.add_step(time.time(), "find_people_clusters_dbscan")
@@ -494,7 +495,7 @@ class ObstacleManager(InferenceManager):
 			visualisation = (visualisation[:, :, ::-1] * 255).astype(np.uint8)
 
 			# STEP TIME
-			timestamp_manager.add_step(time.time(), "setup4")
+			timestamp_manager.add_step(time.time(), "image_conversion_for_output")
 			visualisation = self.posenet_predict(image_path, visualisation, hidden_depth)
 			# STEP TIME
 			timestamp_manager.add_step(time.time(), "posenet_predict")

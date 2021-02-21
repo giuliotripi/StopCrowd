@@ -17,30 +17,36 @@ import posenet
 
 from sklearn.cluster import DBSCAN
 
+
 class Time:
-	def __init__(self, save_dir, start, img_name, opt_level):
+	def __init__(self, save_dir, img_name, use_cuda, opt_level, img_shape=None):
 		self.save_dir = save_dir
-		self.start = start
+		self.start = time.time()
 		self.img_name = img_name
+		self.use_cuda = use_cuda
 		self.opt_level = opt_level
+		self.img_shape = img_shape
 		self.steps = []
 
-	def add_step(self, timestamp, text):
-		self.steps.append([timestamp, text])
+	def add_step(self, text):
+		self.steps.append([time.time(), text])
 
 	def write_info(self):
-		output_string = self.img_name + " [" + str(self.opt_level) + "] (" + str(datetime.fromtimestamp(self.start)) + "):\n"
-		if self.steps is not None:
+		shape = " " + str(self.img_shape[0]) + "x" + str(self.img_shape[1]) if self.img_shape is not None else ""
+		device = "GPU" if self.use_cuda else "CPU"
+		output_string = self.img_name + " [" + str(self.opt_level) + shape + " on " + device + "] ("\
+			+ str(datetime.fromtimestamp(self.start)) + "):\n"
+		if self.steps:
 			output_string += "-> " + self.steps[0][1] + ": " + str(self.steps[0][0] - self.start) + "\n"
-			if len(self.steps) > 1:
-				for i in range(1, len(self.steps)):
-					output_string += "-> " + self.steps[i][1] + ": " + str(self.steps[i][0] - self.steps[i-1][0]) + "\n"
-			output_string += "TOTAL TIME ELAPSED: %f\n" % (self.steps[len(self.steps)-1][0] - self.start)
+			for i in range(1, len(self.steps)):
+				output_string += "-> " + self.steps[i][1] + ": " + str(self.steps[i][0] - self.steps[i-1][0]) + "\n"
+			output_string += "TOTAL TIME ELAPSED: %f\n" % (self.steps[len(self.steps) - 1][0] - self.start)
 		output_string += "\n"
 
 		vis_save_path = os.path.join(self.save_dir, "execution_time.txt")
 		open(vis_save_path, "a").write(output_string)
 		print(output_string)
+
 
 class Point:
 	def __init__(self, x, y):
@@ -402,12 +408,14 @@ class ObstacleManager(InferenceManager):
 	def predict_for_single_image(self, image_path):
 		"""Use the model to predict for a single image and save results to disk
 		"""
-		timestamp_manager = Time(save_dir=self.save_dir, start=time.time(), img_name=image_path, opt_level=self.opt_level)
+		timestamp_manager = Time(save_dir=self.save_dir, img_name=image_path, use_cuda=self.use_cuda, opt_level=self.opt_level)
 
 		print("Predicting for {}".format(image_path))
 		original_image, preprocessed_image = self._load_and_preprocess_image(image_path)
 		pred = self.model_manager.model(preprocessed_image)
 		pred = pred['1/1'].data.cpu().numpy().squeeze(0)
+
+		timestamp_manager.img_shape = original_image.size
 
 		filename, _ = os.path.splitext(os.path.basename(image_path))
 		npy_save_path = os.path.join(self.save_dir, "outputs", filename + '.npy')
@@ -421,10 +429,10 @@ class ObstacleManager(InferenceManager):
 			print(hidden_ground.shape)
 
 			# STEP TIME
-			timestamp_manager.add_step(time.time(), "footprints")
+			timestamp_manager.add_step("footprints")
 			clusters, numeroCluster, clustersInfo, feet = find_clusters(hidden_ground)
 			# STEP TIME
-			timestamp_manager.add_step(time.time(), "find_clusters")
+			timestamp_manager.add_step("find_clusters")
 
 			feet = np.expand_dims(feet, axis=2).astype(np.int)
 			print(feet.shape)
@@ -462,10 +470,10 @@ class ObstacleManager(InferenceManager):
 			feet_coords = [[point.getXInt(), point.getYInt()] for point in points]
 
 			# STEP TIME
-			timestamp_manager.add_step(time.time(), "colormap+feet_coords")
+			timestamp_manager.add_step("colormap+feet_coords")
 			feet_clusters, people_coords_dbscan = find_feet_clusters_dbscan(feet_coords, clr.to_rgba('red'), draw)
 			# STEP TIME
-			timestamp_manager.add_step(time.time(), "find_feet_clusters_dbscan")
+			timestamp_manager.add_step("find_feet_clusters_dbscan")
 
 			# a partire dai baricentri accoppio i piedi identificando le persone e associo questi punti all'immagine
 			peoplePoints = onePointEachPerson(points, 31)  # massima distanza tollerabile tra i piedi
@@ -477,10 +485,10 @@ class ObstacleManager(InferenceManager):
 			draw.distance(points=peoplePoints, maxDistance=100)
 
 			# STEP TIME
-			timestamp_manager.add_step(time.time(), "peoplePoints")
+			timestamp_manager.add_step("peoplePoints")
 			people_clusters_dbscan = find_people_clusters_dbscan(people_coords_dbscan, colors, draw)
 			# STEP TIME
-			timestamp_manager.add_step(time.time(), "find_people_clusters_dbscan")
+			timestamp_manager.add_step("find_people_clusters_dbscan")
 
 			# associo all'immagine un tag per ogni persona con scritto la distanza della persona piu vicina
 			# visualisation = draw_info_about_the_closest(img=visualisation, points=peoplePoints, maxDistance=100)
@@ -495,10 +503,10 @@ class ObstacleManager(InferenceManager):
 			visualisation = (visualisation[:, :, ::-1] * 255).astype(np.uint8)
 
 			# STEP TIME
-			timestamp_manager.add_step(time.time(), "image_conversion_for_output")
+			timestamp_manager.add_step("image_conversion_for_output")
 			visualisation = self.posenet_predict(image_path, visualisation, hidden_depth)
 			# STEP TIME
-			timestamp_manager.add_step(time.time(), "posenet_predict")
+			timestamp_manager.add_step("posenet_predict")
 
 			vis_save_path_footprints = os.path.join(self.save_dir, "visualisations", filename + '_footprints.jpg')
 			vis_save_path_depth = os.path.join(self.save_dir, "visualisations", filename + '_depth.jpg')

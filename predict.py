@@ -35,8 +35,8 @@ class Time:
 			if len(self.steps) > 1:
 				for i in range(1, len(self.steps)):
 					output_string += "-> " + self.steps[i][1] + ": " + str(self.steps[i][0] - self.steps[i-1][0]) + "\n"
-		output_string += "\n"	
-		
+		output_string += "\n"
+
 		vis_save_path = os.path.join(self.save_dir, "quantization.txt")
 		open(vis_save_path, "a").write(output_string)
 		print(output_string)
@@ -443,7 +443,7 @@ class ObstacleManager(InferenceManager):
 			hidden_ground = hidden_ground[:, :, None]
 			visualisation_footprints = original_image * (1 - hidden_ground) + depth_colourmap * hidden_ground
 			visualisation_depth = original_image * 0.05 + depth_colourmap * 0.95
-					
+
 			# visualisation = original_image * 0.05 + depth_colourmap * 0.95
 			# on = np.ones(shape=(682, 1024, 1))
 			# off = np.zeros(shape=(682, 1024, 1))
@@ -506,7 +506,7 @@ class ObstacleManager(InferenceManager):
 			cv2.imwrite(vis_save_path_footprints, visualisation_footprints)
 			cv2.imwrite(vis_save_path_depth, visualisation_depth)
 			cv2.imwrite(vis_save_path, visualisation)
-		
+
 		if self.verbose:
 			timestamp_manager.write_info()
 
@@ -522,7 +522,7 @@ def posenet_params(parser: argparse.ArgumentParser):
 
 if __name__ == '__main__':
 	args = parse_args(posenet_params)
-	
+
 	inference_manager = ObstacleManager(
 		model_name=args.model,
 		use_cuda=torch.cuda.is_available() and not args.no_cuda,

@@ -419,10 +419,10 @@ class ObstacleManager(InferenceManager):
 			hidden_ground = cv2.resize(pred[1], original_image.size) > 0.95
 			print(hidden_ground.shape)
 
-			#STEP TIME
+			# STEP TIME
 			timestamp_manager.add_step(time.time(), "setup")
 			clusters, numeroCluster, clustersInfo, feet = find_clusters(hidden_ground)
-			#STEP TIME
+			# STEP TIME
 			timestamp_manager.add_step(time.time(), "find_clusters")
 
 			feet = np.expand_dims(feet, axis=2).astype(np.int)
@@ -466,19 +466,19 @@ class ObstacleManager(InferenceManager):
 
 			colors = ["orange", "green", "blue", "chocolate", "dimgrey", "black"]
 
-			#STEP TIME
+			# STEP TIME
 			timestamp_manager.add_step(time.time(), "setup2")
 			feet_clusters, people_coords_dbscan = find_feet_clusters_dbscan(feet_coords, clr.to_rgba('red'), draw)
-			#STEP TIME
+			# STEP TIME
 			timestamp_manager.add_step(time.time(), "find_feet_clusters_dbscan")
 
 			# associo all'immagine le linee che uniscono le persone con tag riferito a distanza
 			draw.distance(points=peoplePoints, maxDistance=100)
 
-			#STEP TIME
+			# STEP TIME
 			timestamp_manager.add_step(time.time(), "setup3")
 			people_clusters_dbscan = find_people_clusters_dbscan(people_coords_dbscan, colors, draw)
-			#STEP TIME
+			# STEP TIME
 			timestamp_manager.add_step(time.time(), "find_people_clusters_dbscan")
 
 			# associo all'immagine un tag per ogni persona con scritto la distanza della persona piu vicina
@@ -493,10 +493,10 @@ class ObstacleManager(InferenceManager):
 			visualisation_depth = (visualisation_depth[:, :, ::-1] * 255).astype(np.uint8)
 			visualisation = (visualisation[:, :, ::-1] * 255).astype(np.uint8)
 
-			#STEP TIME
+			# STEP TIME
 			timestamp_manager.add_step(time.time(), "setup4")
 			visualisation = self.posenet_predict(image_path, visualisation, hidden_depth)
-			#STEP TIME
+			# STEP TIME
 			timestamp_manager.add_step(time.time(), "posenet_predict")
 
 			vis_save_path_footprints = os.path.join(self.save_dir, "visualisations", filename + '_footprints.jpg')
@@ -507,11 +507,8 @@ class ObstacleManager(InferenceManager):
 			cv2.imwrite(vis_save_path_depth, visualisation_depth)
 			cv2.imwrite(vis_save_path, visualisation)
 		
-		print(self.verbose)
-		if(self.verbose):
+		if self.verbose:
 			timestamp_manager.write_info()
-
-
 
 
 def posenet_params(parser: argparse.ArgumentParser):
@@ -523,13 +520,12 @@ def posenet_params(parser: argparse.ArgumentParser):
 	parser.add_argument('--opt_level', type=str, choices=['float64', 'float32', 'float16'], default='float64')
 
 
-
 if __name__ == '__main__':
 	args = parse_args(posenet_params)
 	
 	inference_manager = ObstacleManager(
 		model_name=args.model,
-		use_cuda=False,#torch.cuda.is_available() and not args.no_cuda,
+		use_cuda=torch.cuda.is_available() and not args.no_cuda,
 		opt_level=args.opt_level,
 		verbose=args.verbose,
 		save_visualisations=not args.no_save_vis,

@@ -10,11 +10,36 @@ from scipy import ndimage
 from matplotlib import colors as clr
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+import time
+from datetime import datetime
 
 import posenet
 
 from sklearn.cluster import DBSCAN
 
+class Time:
+	def __init__(self, save_dir, start, img_name, opt_level):
+		self.save_dir = save_dir
+		self.start = start
+		self.img_name = img_name
+		self.opt_level = opt_level
+		self.steps = []
+
+	def add_step(self, timestamp, text):
+		self.steps.append([timestamp, text])
+
+	def write_info(self):
+		output_string = self.img_name + " [" + str(self.opt_level) + "] (" + str(datetime.fromtimestamp(self.start)) + "):\n"
+		if self.steps is not None:
+			output_string += "-> " + self.steps[0][1] + ": " + str(self.steps[0][0] - self.start) + "\n"
+			if len(self.steps) > 1:
+				for i in range(1, len(self.steps)):
+					output_string += "-> " + self.steps[i][1] + ": " + str(self.steps[i][0] - self.steps[i-1][0]) + "\n"
+		output_string += "\n"	
+		
+		vis_save_path = os.path.join(self.save_dir, "quantization.txt")
+		open(vis_save_path, "a").write(output_string)
+		print(output_string)
 
 class Point:
 	def __init__(self, x, y):
@@ -309,8 +334,11 @@ def onePointEachPerson(centers_of_mass, maxDistance):
 
 
 class ObstacleManager(InferenceManager):
-	def __init__(self, model_name, save_dir, use_cuda, save_visualisations=True):
+	def __init__(self, model_name, save_dir, use_cuda, opt_level, verbose, save_visualisations=True):
 		super().__init__(model_name, save_dir, use_cuda, save_visualisations)
+		self.save_dir = save_dir
+		self.opt_level = opt_level
+		self.verbose = verbose
 		self.posenet_model = posenet.load_model(args.posenet_model)
 		if self.use_cuda:
 			self.posenet_model = self.posenet_model.cuda()
@@ -373,6 +401,8 @@ class ObstacleManager(InferenceManager):
 	def predict_for_single_image(self, image_path):
 		"""Use the model to predict for a single image and save results to disk
 		"""
+		timestamp_manager = Time(save_dir=self.save_dir, start=time.time(), img_name=image_path, opt_level=self.opt_level)
+
 		print("Predicting for {}".format(image_path))
 		original_image, preprocessed_image = self._load_and_preprocess_image(image_path)
 		pred = self.model_manager.model(preprocessed_image)
@@ -388,7 +418,13 @@ class ObstacleManager(InferenceManager):
 			# tutti i pred[0 -> 3] hanno shape (256, 448)
 			hidden_ground = cv2.resize(pred[1], original_image.size) > 0.95
 			print(hidden_ground.shape)
+
+			#STEP TIME
+			timestamp_manager.add_step(time.time(), "setup")
 			clusters, numeroCluster, clustersInfo, feet = find_clusters(hidden_ground)
+			#STEP TIME
+			timestamp_manager.add_step(time.time(), "find_clusters")
+
 			feet = np.expand_dims(feet, axis=2).astype(np.int)
 			print(feet.shape)
 			hidden_depth = cv2.resize(sigmoid_to_depth(pred[3]), original_image.size)
@@ -407,7 +443,7 @@ class ObstacleManager(InferenceManager):
 			hidden_ground = hidden_ground[:, :, None]
 			visualisation_footprints = original_image * (1 - hidden_ground) + depth_colourmap * hidden_ground
 			visualisation_depth = original_image * 0.05 + depth_colourmap * 0.95
-
+					
 			# visualisation = original_image * 0.05 + depth_colourmap * 0.95
 			# on = np.ones(shape=(682, 1024, 1))
 			# off = np.zeros(shape=(682, 1024, 1))
@@ -430,12 +466,20 @@ class ObstacleManager(InferenceManager):
 
 			colors = ["orange", "green", "blue", "chocolate", "dimgrey", "black"]
 
+			#STEP TIME
+			timestamp_manager.add_step(time.time(), "setup2")
 			feet_clusters, people_coords_dbscan = find_feet_clusters_dbscan(feet_coords, clr.to_rgba('red'), draw)
+			#STEP TIME
+			timestamp_manager.add_step(time.time(), "find_feet_clusters_dbscan")
 
 			# associo all'immagine le linee che uniscono le persone con tag riferito a distanza
 			draw.distance(points=peoplePoints, maxDistance=100)
 
+			#STEP TIME
+			timestamp_manager.add_step(time.time(), "setup3")
 			people_clusters_dbscan = find_people_clusters_dbscan(people_coords_dbscan, colors, draw)
+			#STEP TIME
+			timestamp_manager.add_step(time.time(), "find_people_clusters_dbscan")
 
 			# associo all'immagine un tag per ogni persona con scritto la distanza della persona piu vicina
 			# visualisation = draw_info_about_the_closest(img=visualisation, points=peoplePoints, maxDistance=100)
@@ -449,7 +493,11 @@ class ObstacleManager(InferenceManager):
 			visualisation_depth = (visualisation_depth[:, :, ::-1] * 255).astype(np.uint8)
 			visualisation = (visualisation[:, :, ::-1] * 255).astype(np.uint8)
 
+			#STEP TIME
+			timestamp_manager.add_step(time.time(), "setup4")
 			visualisation = self.posenet_predict(image_path, visualisation, hidden_depth)
+			#STEP TIME
+			timestamp_manager.add_step(time.time(), "posenet_predict")
 
 			vis_save_path_footprints = os.path.join(self.save_dir, "visualisations", filename + '_footprints.jpg')
 			vis_save_path_depth = os.path.join(self.save_dir, "visualisations", filename + '_depth.jpg')
@@ -458,6 +506,12 @@ class ObstacleManager(InferenceManager):
 			cv2.imwrite(vis_save_path_footprints, visualisation_footprints)
 			cv2.imwrite(vis_save_path_depth, visualisation_depth)
 			cv2.imwrite(vis_save_path, visualisation)
+		
+		print(self.verbose)
+		if(self.verbose):
+			timestamp_manager.write_info()
+
+
 
 
 def posenet_params(parser: argparse.ArgumentParser):
@@ -465,13 +519,19 @@ def posenet_params(parser: argparse.ArgumentParser):
 	parser.add_argument('--scale_factor', type=float, default=1.0)
 	parser.add_argument('--notxt', action='store_true')
 	parser.add_argument('--showplt', action='store_true')
+	parser.add_argument('--verbose', action='store_true')
+	parser.add_argument('--opt_level', type=str, choices=['float64', 'float32', 'float16'], default='float64')
+
 
 
 if __name__ == '__main__':
 	args = parse_args(posenet_params)
+	
 	inference_manager = ObstacleManager(
 		model_name=args.model,
-		use_cuda=torch.cuda.is_available() and not args.no_cuda,
+		use_cuda=False,#torch.cuda.is_available() and not args.no_cuda,
+		opt_level=args.opt_level,
+		verbose=args.verbose,
 		save_visualisations=not args.no_save_vis,
 		save_dir=args.save_dir)
 	inference_manager.predict(image_path=args.image)

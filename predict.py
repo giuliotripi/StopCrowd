@@ -63,7 +63,6 @@ class Time:
 			head += "ELAPSED_TIME\n"
 		vis_save_path = os.path.join(self.save_dir, "execution_time.csv")
 		file = open(vis_save_path, "a")
-		os.chmod(vis_save_path, 0o777)
 		if os.stat(vis_save_path).st_size == 0:
 			file.write(head)
 		file.write(output_string)
@@ -461,7 +460,7 @@ class ObstacleManager(InferenceManager):
 
 			# TODO: da qui indentificare il centro di ogni footprint e vedere la distanza nello stesso punto della
 			# hidden_depth in modo da vedere quanto è distante nella scena
-			original_image = np.array(original_image).astype(dtype=self.opt_level, copy=True) / 255.0
+			original_image = np.array(original_image) / 255.0
 
 			# normalise the relevant parts of the depth map and apply colormap
 			_max = hidden_depth[hidden_ground].max()

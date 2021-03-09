@@ -384,13 +384,16 @@ class ObstacleManager(InferenceManager):
 		cluster_count = 0
 		clustersInfo = {}
 		ones = np.ones_like(array, dtype=int)
+		dimensioneMax = (array.shape[0] * array.shape[1]) / 600
 		for val in unique_vals:
 			labelling, label_count = ndimage.label(array == val)
 			for k in range(1, label_count + 1):
 				clustered[labelling == k] = cluster_count
 				dimensione = len(clustered[labelling == k])
 				isFoot = False
-				if val == False and dimensione < 1000:  # val è del tipo np.bool_ quindi non posso usare val is False
+				# (1840, 3264) = 6.005.760 -> il massimo è circa 10.000
+				# (682, 1024) = 698.368 -> il massimo è circa 1.000
+				if val == False and dimensione < dimensioneMax:  # val è del tipo np.bool_ quindi non posso usare val is False
 					feet[labelling == k] = True
 					isFoot = True
 				clustersInfo[cluster_count] = ClusterInfo(val, dimensione, isFoot)

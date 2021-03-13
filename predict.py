@@ -182,12 +182,7 @@ class Draw:
 
 	def stars(self, num_stars, color, text="ALERT!", uint8=False):
 		if uint8:
-			color = clr.to_rgb(color)
-			colorR = []
-			colorR.append(int(color[2]*255))
-			colorR.append(int(color[1]*255))
-			colorR.append(int(color[0]*255))
-			color = colorR
+			color = [int(channel * 255) for channel in clr.to_rgb(color)].reverse()
 		else:
 			color = clr.to_rgba(color)
 
@@ -352,7 +347,6 @@ class ObstacleManager(InferenceManager):
 			# visualisation = draw_info_about_the_closest(img=visualisation, points=peoplePoints, maxDistance=100)
 
 			visualisation = draw.get_img()
-			print(visualisation)
 			visualisation = (visualisation[:, :, ::-1] * 255).astype(np.uint8)
 
 			# STEP TIME
@@ -360,8 +354,10 @@ class ObstacleManager(InferenceManager):
 			visualisation = self.posenet_predict(image_path, visualisation, hidden_depth)
 			# STEP TIME
 			timestamp_manager.add_step("posenet_predict")
+
 			draw.set_img(visualisation)
-			draw.stars(5, color='blue', uint8=True)
+			draw.stars(5, color='green', uint8=True)
+
 			if self.more_output:
 				visualisation_footprints = original_image * (1 - hidden_ground) + depth_colourmap * hidden_ground
 				visualisation_depth = original_image * 0.05 + depth_colourmap * 0.95

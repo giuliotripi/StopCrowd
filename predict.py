@@ -182,7 +182,8 @@ class Draw:
 
 	def stars(self, num_stars, color, text="ALERT!", uint8=False):
 		if uint8:
-			color = [int(channel * 255) for channel in clr.to_rgb(color)].reverse()
+			color = [int(channel * 255) for channel in clr.to_rgb(color)]
+			color.reverse()
 		else:
 			color = clr.to_rgba(color)
 
@@ -235,7 +236,15 @@ class ObstacleManager(InferenceManager):
 
 			kp_labels, clusters_interpersonali, persone_vicine = self.find_near_keypoints(keypoint_coords, hidden_depth)
 
-			print("Persone vicine:", persone_vicine)
+			id_persone_vicine = []
+			for p in persone_vicine:
+				if p[0] not in id_persone_vicine:
+					id_persone_vicine.append(p[0])
+				if p[1] not in id_persone_vicine:
+					id_persone_vicine.append(p[1])
+
+			num_persone_vicine = len(id_persone_vicine)
+			print("Ci sono %d persone vicine: %s" % (num_persone_vicine, persone_vicine))
 
 			draw_image = posenet.draw_skel_and_kp(
 				base_out_image, pose_scores, keypoint_scores, keypoint_coords, kp_labels, clusters_interpersonali,
@@ -256,7 +265,7 @@ class ObstacleManager(InferenceManager):
 				for ki, (s, c) in enumerate(zip(keypoint_scores[pi, :], keypoint_coords[pi, :, :])):
 					print('Keypoint %s, score = %f, coord = %s' % (posenet.PART_NAMES[ki], s, c))
 
-		return draw_image
+		return draw_image, num_persone_vicine
 
 
 	def predict_for_single_image(self, image_path):
@@ -351,12 +360,17 @@ class ObstacleManager(InferenceManager):
 
 			# STEP TIME
 			timestamp_manager.add_step("image_conversion_for_output")
-			visualisation = self.posenet_predict(image_path, visualisation, hidden_depth)
+			visualisation, num_near_people = self.posenet_predict(image_path, visualisation, hidden_depth)
 			# STEP TIME
 			timestamp_manager.add_step("posenet_predict")
 
-			draw.set_img(visualisation)
-			draw.stars(5, color='green', uint8=True)
+			for cluster_k in people_clusters_dbscan:
+				if cluster_k != -1:
+					num_near_people += len(people_clusters_dbscan[cluster_k])
+
+			if num_near_people > 0:
+				draw.set_img(visualisation)
+				draw.stars(num_near_people, color='red', uint8=True)
 
 			if self.more_output:
 				visualisation_footprints = original_image * (1 - hidden_ground) + depth_colourmap * hidden_ground

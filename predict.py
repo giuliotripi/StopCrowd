@@ -503,7 +503,7 @@ class ObstacleManager(InferenceManager):
 				# In questi casi porto le coordinate all'estremità dell'immagine
 				coord_ankle_x = max(min(hidden_depth.shape[0] - 1, coord_ankle[0]), 0)
 				coord_ankle_y = max(min(hidden_depth.shape[1] - 1, coord_ankle[1]), 0)
-				point_depth = hidden_depth[coord_ankle_x][coord_ankle_y] * 10
+				point_depth = hidden_depth[coord_ankle_x][coord_ankle_y] * 30
 				depth_column.append([[point_depth] for _ in range(17)])
 			all_kp = np.append(all_kp, depth_column, axis=2)
 

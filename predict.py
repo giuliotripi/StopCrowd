@@ -1,4 +1,5 @@
 import argparse
+from typing import List, Tuple
 
 from footprints.predict_simple import InferenceManager, parse_args
 import torch
@@ -117,35 +118,44 @@ class ClusterInfo:
 
 
 class Draw:
-	def __init__(self, img):
+	def __init__(self, img, uint8=False):
 		self.img = img
+		self.uint8 = uint8
 		self.stars_centers = []
 
 	def get_img(self):
 		return self.img
 
-	def set_img(self, img):
+	def set_img(self, img, uint8=False):
 		self.img = img
+		self.uint8 = uint8
 		self.stars_centers = []
 
-	def points(self, points, radius=2, colorPoints=clr.to_rgba('white')):
+	def points(self, points, radius=2, colorPoints: str = 'white'):
+		color = self.color_name_to_color(colorPoints)
 		for point in points:
 			if isinstance(point, Point):
 				x = point.getXInt()
 				y = point.getYInt()
 			elif isinstance(point, list):
 				x, y = point
-			self.img[x - radius:x + radius, y - radius:y + radius, 0:2] = colorPoints[0:2]
+			else:
+				raise TypeError("point should be an instance of list or Point")
+			self.img[x - radius:x + radius, y - radius:y + radius, 0:2] = color[0:2]
 
-	def line(self, pointA, pointB, colorLine=clr.to_rgba('blue')):
-		self.img = cv2.line(self.img, (pointA.getYInt(), pointA.getXInt()), (pointB.getYInt(), pointB.getXInt()), color=colorLine,
+	def line(self, pointA, pointB, colorLine: str = 'blue'):
+		color = self.color_name_to_color(colorLine)
+		self.img = cv2.line(self.img, (pointA.getYInt(), pointA.getXInt()), (pointB.getYInt(), pointB.getXInt()), color=color,
 						thickness=1)
 
-	def tag(self, point, text, colorText=clr.to_rgba('red')):
+	def tag(self, point, text, colorText: str = 'red'):
+		color = self.color_name_to_color(colorText)
 		self.img = cv2.putText(img=self.img, text=text, org=(point.getYInt(), point.getXInt()), fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-						   color=colorText, thickness=1, fontScale=0.6)
+						   color=color, thickness=1, fontScale=0.6)
 
-	def line_with_tag(self, pointA, pointB, text, colorLine=clr.to_rgba('blue'), colorText=clr.to_rgba('red')):
+	def line_with_tag(self, pointA: Point, pointB: Point, text: str, colorNameLine: str = 'blue', colorNameText: str = 'red'):
+		colorLine = self.color_name_to_color(colorNameLine)
+		colorText = self.color_name_to_color(colorNameText)
 		self.img = cv2.line(self.img, (pointA.getYInt(), pointA.getXInt()), (pointB.getYInt(), pointB.getXInt()), color=colorLine,
 					   thickness=1)
 		midp = pointA.getMidPoint(pointB)
@@ -170,7 +180,7 @@ class Draw:
 			dist = points[i].getAbsoluteDistance(closest)
 			self.tag(points[i], str(int(dist)))
 
-	def star(self, radius, color):
+	def star(self, radius, color: List[int]):
 		if self.stars_centers:
 			center_point = Point(self.stars_centers[len(self.stars_centers) - 1].x + 3*radius, 3*radius)
 		else:
@@ -180,18 +190,21 @@ class Draw:
 		for i in range(radius):
 			self.img = cv2.circle(self.img, center, i, color)
 
-	def stars(self, num_stars, color, text="ALERT!", uint8=False):
-		if uint8:
-			color = [int(channel * 255) for channel in clr.to_rgb(color)]
-			color.reverse()
-		else:
-			color = clr.to_rgba(color)
-
+	def stars(self, num_stars, colorName: str, text="ALERT!"):
+		color = self.color_name_to_color(colorName)
 		heigth, _, _ = self.img.shape
 		radius = int(heigth/80)
-		self.tag(Point(7*radius, 2*radius), text=text, colorText=color)
+		self.tag(Point(7*radius, 2*radius), text=text, colorText=colorName)
 		for i in range(num_stars):
 			self.star(radius, color)
+
+	def color_name_to_color(self, colorName: str) -> List[int]:
+		if self.uint8:
+			color = [int(channel * 255) for channel in clr.to_rgb(colorName)]
+			color.reverse()
+		else:
+			color = clr.to_rgb(colorName)
+		return color
 
 
 class ObstacleManager(InferenceManager):
@@ -333,13 +346,13 @@ class ObstacleManager(InferenceManager):
 
 			# STEP TIME
 			timestamp_manager.add_step("colormap+feet_coords")
-			feet_clusters, people_coords_dbscan = self.find_feet_clusters_dbscan(feet_coords, clr.to_rgba('red'), draw)
+			feet_clusters, people_coords_dbscan = self.find_feet_clusters_dbscan(feet_coords, 'red', draw)
 			# STEP TIME
 			timestamp_manager.add_step("find_feet_clusters_dbscan")
 
 			# a partire dai baricentri accoppio i piedi identificando le persone e associo questi punti all'immagine
 			peoplePoints = self.onePointEachPerson(points, 31)  # massima distanza tollerabile tra i piedi
-			draw.points(peoplePoints, colorPoints=clr.to_rgba('yellow'))
+			draw.points(peoplePoints, colorPoints='yellow')
 
 			colors = ["orange", "green", "blue", "chocolate", "dimgrey", "black"]
 
@@ -369,8 +382,8 @@ class ObstacleManager(InferenceManager):
 					num_near_people += len(people_clusters_dbscan[cluster_k])
 
 			if num_near_people > 0:
-				draw.set_img(visualisation)
-				draw.stars(num_near_people, color='red', uint8=True)
+				draw.set_img(visualisation, uint8=True)
+				draw.stars(num_near_people, colorName='red')
 
 			if self.more_output:
 				visualisation_footprints = original_image * (1 - hidden_ground) + depth_colourmap * hidden_ground
@@ -475,11 +488,11 @@ class ObstacleManager(InferenceManager):
 			i = 0
 			for label in people_clusters:
 				if label >= 0:
-					color = clr.to_rgba(colors[i % len(colors)])
+					color = colors[i % len(colors)]
 					draw.points(people_clusters[label], radius=3, colorPoints=color)
 					for persona in people_clusters[label]:
 						draw.tag(Point.createFromList([persona[0] + 25, persona[1] - 10]), str(i + 1),
-								 colorText=clr.to_rgba('yellow'))
+								 colorText='yellow')
 					i += 1
 
 		return people_clusters

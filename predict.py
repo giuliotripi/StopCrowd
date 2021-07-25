@@ -217,7 +217,7 @@ class ObstacleManager(InferenceManager):
 			self.posenet_model = self.posenet_model.cpu()
 		self.output_stride = self.posenet_model.output_stride
 
-	def posenet_predict(self, filename, base_out_image=None, hidden_depth=None):
+	def posenet_predict(self, filename, base_out_image=None, hidden_depth=None, different_base_image=None):
 		input_image, draw_image, output_scale = posenet.read_imgfile(
 			filename, scale_factor=args.scale_factor, output_stride=self.output_stride)
 
@@ -246,13 +246,15 @@ class ObstacleManager(InferenceManager):
 			kp_labels, clusters_interpersonali, persone_vicine = self.find_near_keypoints(keypoint_coords, hidden_depth)
 
 			print("Persone vicine:", persone_vicine)
-
-			draw_image = posenet.draw_skel_and_kp(
-				base_out_image, pose_scores, keypoint_scores, keypoint_coords, kp_labels, clusters_interpersonali,
-				min_pose_score=0.25, min_part_score=0.25)
+			if different_base_image is None:
+				draw_image = posenet.draw_skel_and_kp(
+					base_out_image, pose_scores, keypoint_scores, keypoint_coords, kp_labels, clusters_interpersonali, min_pose_score=0.25, min_part_score=0.25)
+			else:
+				draw_image = posenet.draw_skel_and_kp(
+					different_base_image, pose_scores, keypoint_scores, keypoint_coords, kp_labels, clusters_interpersonali, min_pose_score=0.25, min_part_score=0.25)
 
 			if base_out_image is None:
-				vis_save_path = os.path.join(self.save_dir, "visualisations", "posenet_ " + os.path.basename(filename) + '.jpg')
+				vis_save_path = os.path.join(self.save_dir, "visualisations", "posenet_ " + os.path.basename(filename) + '.png')
 				cv2.imwrite(vis_save_path, draw_image)
 				print("Image saved to", vis_save_path)
 
@@ -276,8 +278,12 @@ class ObstacleManager(InferenceManager):
 		filename, _ = os.path.splitext(os.path.basename(image_path))
 		original_img = pil_loader(image_path)
 
-		hidden_depth = midas.run(image_path)
-		original_img = self.posenet_predict(image_path, hidden_depth=hidden_depth)
+		 # set torch options (richiesto da midas)
+		torch.backends.cudnn.enabled = True
+		torch.backends.cudnn.benchmark = True
+
+		hidden_depth, out = midas.run_2(image_path)
+		original_img = self.posenet_predict(image_path, hidden_depth=hidden_depth, different_base_image=None) #se in different_base_image metti "out" utilizza la depth come immagine di base
 
 		vis_save_path = os.path.join(self.save_dir, "visualisations", filename + '.jpg')
 		cv2.imwrite(vis_save_path, original_img)
